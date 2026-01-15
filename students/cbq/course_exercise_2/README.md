@@ -12,9 +12,8 @@ Barnes-Hut algorithm for efficient gravitational N-body simulations with serial,
 ├── particle.f90          # Particle type definition
 ├── barnes_hut.f90        # Barnes-Hut tree algorithm
 ├── main.f90              # Serial/OpenMP main program
-├── main_mpi.f90          # MPI distributed version
-├── generate_input.py     # Input file generator
-└── benchmark.py          # Performance testing tool
+├── main_mpi.f90          # MPI version
+├── comparation_times.py  # Input file generator and comparation times
 ```
 
 ## Algorithm Overview
@@ -29,8 +28,8 @@ The Barnes-Hut algorithm reduces N-body force calculation complexity from O(N²)
 4. **Time Integration**: Update positions and velocities using leapfrog integration
 
 ### Key Parameters
-- **θ (theta) = 1.0**: Opening angle criterion (smaller = more accurate, slower)
-- **Leapfrog integration**: Symplectic integrator that conserves energy
+- **θ (theta) = 1.0**: Opening angle criterion (smaller = more accurate but slower)
+- **Leapfrog integration**: Simple integrator that conserves energy
 
 ## Compilation
 
@@ -98,72 +97,27 @@ mpirun --allow-run-as-root -np 8 ./nbody_mpi < input.dat
 ### Input File Format
 
 ```
-dt          # Time step (e.g., 0.01)
-dt_out      # Output interval (e.g., 0.1)
-t_end       # End time (e.g., 5.0)
-n           # Number of particles (e.g., 100)
-# For each particle (one per line):
+dt          # Time step 
+dt_out      # Output interval 
+t_end       # End time 
+n           # Number of particles 
+# For each particle:
 mass x y z vx vy vz
 ```
 
-### Using the Input Generator
-
-```bash
-python3 generate_input.py
-```
-
-This interactive script can generate:
-1. Random particle system
-2. Plummer sphere (realistic galaxy cluster)
-3. Two colliding clusters
-4. Simplified solar system
-
-### Manual Input Example
-
-Create `input.dat`:
-```
-0.01
-0.5
-5.0
-3
-1.0 0.0 0.0 0.0 0.0 0.0 0.0
-1.0 1.0 0.0 0.0 0.0 0.5 0.0
-1.0 0.5 0.866 0.0 0.0 -0.5 0.0
-```
-
-## Performance Benchmarking
-
-### Automated Benchmark
+### Using the Input Generator and benchmark of times
 
 Test all versions with multiple problem sizes:
 
 ```bash
-python3 benchmark.py
+python3 comparation_times.py
 ```
 
 This will:
-- Generate input files with 100, 500, 1000, 2000 particles
+- Generate input files with 100, 1000, 5000, 10000, 50000 particles
 - Run serial, OpenMP (2,4 threads), and MPI (2,4 processes) versions
 - Calculate speedups and efficiencies
 - Display results table
-
-### Manual Timing
-
-Use the `time` command:
-
-```bash
-# Serial
-time ./nbody_serial < input.dat
-
-# OpenMP
-export OMP_NUM_THREADS=4
-time ./nbody_parallel < input.dat
-
-# MPI
-time mpirun --allow-run-as-root -np 4 ./nbody_mpi < input.dat
-```
-
-Compare the `real` (wall clock) time for each version.
 
 ## Output Files
 
