@@ -127,14 +127,6 @@ program nbody_simulation
             end do
             write(output_unit, *)
             
-            ! Print first few particles to screen
-            print*, "Time:", t
-            do i = 1, min(10, n)
-                print '(A,I3,A,3F12.5)', "  Particle ", i, ": ", &
-                    particles(i)%p%x, particles(i)%p%y, particles(i)%p%z
-            end do
-            print*, ""
-            
             t_out = 0.0_real64
         end if
         

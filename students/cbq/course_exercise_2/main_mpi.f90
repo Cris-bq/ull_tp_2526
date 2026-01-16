@@ -33,7 +33,6 @@ program nbody_simulation_mpi
         read*, n
     end if
     
-    ! Broadcast parameters to all processes
     call MPI_Bcast(dt, 1, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierr)
     call MPI_Bcast(dt_out, 1, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierr)
     call MPI_Bcast(t_end, 1, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierr)
@@ -63,11 +62,9 @@ program nbody_simulation_mpi
         end do
         
         print*, "Barnes-Hut N-body (MPI)"
-        print*, ""
         print*, "Particles:", n
         print*, "MPI processes:", nprocs
 
-        
         open(newunit=output_unit, file='output_mpi.dat', status='replace', action='write')
     end if
     
@@ -158,14 +155,7 @@ program nbody_simulation_mpi
                     particles(i)%p%x, particles(i)%p%y, particles(i)%p%z
             end do
             write(output_unit, *)
-            
-            print*, "Time:", t
-            do i = 1, min(10, n)
-                print '(A,I3,A,3F12.5)', "  Particle ", i, ": ", &
-                    particles(i)%p%x, particles(i)%p%y, particles(i)%p%z
-            end do
-            print*, "-----------------------------------"
-            
+                   
             t_out = 0.0_real64
         end if
         
@@ -185,7 +175,6 @@ program nbody_simulation_mpi
         print*, "Simulation completed!"
         print*, "Output: output_mpi.dat"
         print*, "Wall time:", end_time - start_time, "seconds"
-        print*, "Processes:", nprocs
     end if
     
     call MPI_Finalize(ierr)

@@ -1,11 +1,10 @@
 # Barnes-Hut N-body Simulation
 
-Barnes-Hut algorithm for efficient gravitational N-body simulations with serial, parallel (OpenMP), and distributed (MPI) implementations.
+An implementation of the Barnes–Hut algorithm for efficient gravitational N-body simulations with serial, parallel (OpenMP), and distributed (MPI) implementations.
 
 ## Project Structure
 
 ```
-.
 ├── Makefile              # Build system
 ├── README.md             # This file
 ├── geometry.f90          # 3D vector/point operations
@@ -13,23 +12,22 @@ Barnes-Hut algorithm for efficient gravitational N-body simulations with serial,
 ├── barnes_hut.f90        # Barnes-Hut tree algorithm
 ├── main.f90              # Serial/OpenMP main program
 ├── main_mpi.f90          # MPI version
-├── comparation_times.py  # Input file generator and comparation times
+├── comparison_times.py  # Input file generator and comparation times
 ```
 
 ## Algorithm Overview
 
 The Barnes-Hut algorithm reduces N-body force calculation complexity from O(N²) to O(N log N) using an octree:
 
-1. **Tree Construction**: Recursively divide 3D space into octants, creating a tree where each leaf contains ≤1 particle
+1. **Tree Construction**: Divides recursively 3D space into octants, creating a tree where each leaf contains ≤1 particle
 2. **Mass Calculation**: Calculate total mass and center of mass for each tree node
 3. **Force Calculation**: For each particle, traverse the tree:
    - If a node is far enough (l/D < θ), treat it as a single mass
    - Otherwise, recurse into its children
 4. **Time Integration**: Update positions and velocities using leapfrog integration
 
-### Key Parameters
 - **θ (theta) = 1.0**: Opening angle criterion (smaller = more accurate but slower)
-- **Leapfrog integration**: Simple integrator that conserves energy
+
 
 ## Compilation
 
@@ -91,12 +89,20 @@ mpirun --allow-run-as-root -np 2 ./nbody_mpi < input.dat
 mpirun --allow-run-as-root -np 4 ./nbody_mpi < input.dat
 mpirun --allow-run-as-root -np 8 ./nbody_mpi < input.dat
 ```
+Note: `--allow-run-as-root` is only needed when running MPI as root (e.g. in WSL or containers).
+
+Standard execution:
+
+```bash
+mpirun -np 4 ./nbody_mpi < input.dat
+```
 
 ## Creating Input Files
 
 ### Input File Format
 
-```
+
+```bash
 dt          # Time step 
 dt_out      # Output interval 
 t_end       # End time 
@@ -110,12 +116,12 @@ mass x y z vx vy vz
 Test all versions with multiple problem sizes:
 
 ```bash
-python3 comparation_times.py
+python3 comparison_times.py
 ```
 
 This will:
-- Generate input files with 100, 1000, 5000, 10000, 50000 particles
-- Run serial, OpenMP (2,4 threads), and MPI (2,4 processes) versions
+- Generate input files with 100, 1000, 5000, 10000  particles
+- Run serial, OpenMP (2, 4, 8 threads), and MPI (2, 4, 8 processes) versions
 - Calculate speedups and efficiencies
 - Display results table
 
@@ -129,10 +135,11 @@ Format: Each line contains `time x1 y1 z1 x2 y2 z2 ... xn yn zn`
 ## Parallelization Strategies
 
 ### OpenMP (Shared Memory)
-- **Parallelized section**: Force calculation loop
-- **Strategy**: Each thread calculates forces for a subset of particles
-- **Synchronization**: None needed (each particle's acceleration is independent)
-- **Best for**: Medium-sized problems on multicore machines
+- **Parallelized section**: the force calculation step 
+
+Each thread is responsible for computing the forces acting on a group of particles.
+
+Synchronization is not required, since each particle’s acceleration is computed independently.
 
 ```fortran
 !$omp parallel do default(shared) private(i) schedule(dynamic)
@@ -143,49 +150,62 @@ end do
 ```
 
 ### MPI (Distributed Memory)
-- **Strategy**: Static domain decomposition
-- **Tree**: Each process builds complete tree (needed for force calculations)
-- **Communication**: 
-  - `MPI_Bcast`: Distribute particle data
-  - `MPI_Allreduce`: Sum accelerations from all processes
-- **Best for**: Very large problems on clusters
+The set of particles is divided among different processes. Every process builds its own Barnes–Hut tree, which is needed to compute forces  
+- **Communication between processes**:
+  - `MPI_Bcast` is used to share particle data  
+  - `MPI_Allreduce` is used to combine acceleration results from all processes  
 
-### Performance Characteristics
+In both cases, it is necessary to take into account the overhead, an additional cost introduced by thread or process management, synchronization, and communication when a program is executed in parallel.
 
-| Problem Size | Best Choice | Why |
-|--------------|-------------|-----|
-| N < 500 | Serial or OpenMP | Minimal overhead |
-| N = 500-5000 | OpenMP | Good speedup, low overhead |
-| N > 5000 | MPI or OpenMP | Depends on hardware |
+## Performance Results
 
-**Note**: MPI shows overhead for small problems due to communication costs. Performance improves relative to serial as N increases.
+Results obtained on a system testing different particle counts:
 
-## Expected Speedups
+### Speedup Comparison
 
-Typical results (will vary based on hardware):
+| Particle Count | Serial (s) | OpenMP 2T | OpenMP 4T | OpenMP 8T | MPI 2P | MPI 4P | MPI 8P |
+|----------------|------------|-----------|-----------|-----------|--------|--------|--------|
+| **N = 100**    | 0.09       | 0.77×     | 0.74×     | 1.14×     | 0.18×  | 0.16×  | 0.13×  |
+| **N = 1000**   | 2.56       | 0.98×     | 1.21×     | 1.66×     | 1.04×  | 1.29×  | 1.69×  |
+| **N = 5000**   | 24.62      | 0.98×     | 1.25×     | 1.82×     | 1.45×  | 2.09×  | **2.80×** |
+| **N = 10000**  | 60.97      | 1.04×     | 1.31×     | 1.97×     | 1.52×  | 2.24×  | **3.03×** |
 
-| Version | Speedup (N=100) | Speedup (N=1000) |
-|---------|-----------------|------------------|
-| Serial | 1.0× | 1.0× |
-| OpenMP (2T) | 1.7× | 1.8× |
-| OpenMP (4T) | 2.5× | 3.2× |
-| MPI (2P) | 0.6× | 1.6× |
-| MPI (4P) | 0.5× | 2.8× |
+*Speedup = Serial Time / Parallel Time*
 
-## Troubleshooting
+### Observations
 
-### OpenMP not working
-- Check compilation: `gfortran --version` should show OpenMP support
-- Verify threads: The program prints "OpenMP threads: N" at startup
+1. **Problem Size Dependency**
+   - **Small problems (N = 100)**: Parallelization overhead dominates, serial is fastest
+   - **Medium problems (N = 1000)**: OpenMP and MPI become competitive (1.2-1.7× speedup)
+   - **Large problems (N ≥ 5000)**: Clear benefit from parallelization
+   - **Very large problems (N = 10000)**: **MPI 8P achieves 3.03× speedup** (best result)
+   
+2. **OpenMP Performance**
+   - Consistent scaling improvement with thread count
+   - N=1000: 1.66× speedup with 8 threads
+   - N=10000: 1.97× speedup with 8 threads
+   - Low overhead makes it effective even for medium-sized problems
+   
+3. **MPI Performance**
+   - Large underperformance for small problems (N=100: 0.13× with 8P)
+   - Becomes better at N=1000 (1.69× with 8P)
+   - **Outperforms OpenMP at N≥5000**:
+     - N=5000: 2.80× vs 1.82× (OpenMP 8T)
+     - N=10000: 3.03× vs 1.97× (OpenMP 8T)
+   - Scales better than OpenMP for large problems
+   
+4. **Scalability Analysis**
+   - **OpenMP**: Sub-linear scaling, efficiency decreases with more threads
+     - N=10000, 8T: 1.97× (24.6% efficiency)
+   - **MPI**: Better strong scaling for large problems
+     - N=10000, 8P: 3.03× (37.9% efficiency)
+   - **Overhead**: Visible at small N but amortized at large N
+   
+### Recommendations
 
-### MPI errors
-- Install OpenMPI: `sudo apt install openmpi-bin libopenmpi-dev`
-- Check installation: `mpirun --version`
-- Root warning: Use `--allow-run-as-root` flag (safe for development)
-
-### Compilation warnings
-- All warnings have been addressed in the latest version
-- If you see warnings, run `make clean && make`
+- **For N < 1000**: Use serial version (minimal overhead)
+- **For N = 1000-5000**: Use OpenMP with 4-8 threads (good speedup, simple)
+- **For N > 5000**: Use MPI with 8 processes (best performance)
 
 ## Technical Details
 
@@ -195,10 +215,10 @@ Typical results (will vary based on hardware):
   - 1 = leaf (single particle)
   - 2 = internal node (8 children)
 - **Tree rebuild**: Complete rebuild every timestep after position updates
-- **Memory management**: Proper cleanup with `borrar_tree` to prevent leaks
+- **Memory management**: Cleanup with `borrar_tree` to prevent leaks
 
 ### Time Integration
-Uses leapfrog (kick-drift-kick) method:
+Uses leapfrog method:
 ```
 v(t+dt/2) = v(t) + a(t) × dt/2
 r(t+dt) = r(t) + v(t+dt/2) × dt
@@ -206,7 +226,9 @@ a(t+dt) = calculate_forces(r(t+dt))
 v(t+dt) = v(t+dt/2) + a(t+dt) × dt/2
 ```
 
-## Authors
+## Author
+Cristina Bolaños Quevedo  
 
-Course Exercise 2 - Programming Techniques (Técnicas de Programación)  
-Universidad de La Laguna, 2025-2026
+Course Exercise 2 – Programming Techniques  
+Barnes–Hut N-body Simulation  
+Universidad de La Laguna, 2025–2026
